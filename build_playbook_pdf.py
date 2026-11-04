@@ -477,7 +477,7 @@ def generate_pdf(output_filename="cyber_defense_playbook.pdf"):
     story.append(Spacer(1, 10))
 
     # ==========================================================================
-    # SECTION 2: Module 1 — Windows Laptop Deep Audit & Hardening
+    # SECTION 2: Module 1 — Windows Endpoint Deep Audit & Hardening
     # ==========================================================================
     story.append(PageBreak())
     story.append(Paragraph("2. Module 1: Windows Endpoint & Kernel Driver Compromise Assessment", h1_style))

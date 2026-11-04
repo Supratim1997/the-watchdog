@@ -202,7 +202,7 @@ Windows_Audit_20261105_021500/
 ## Repository Structure
 
 ```
-d:\Source\WatchDogs/
+the-watchdog/
 ├── windows_compromise_audit.ps1      # Windows Endpoint & Kernel Driver Auditor
 ├── server_webshell_rootkit_audit.sh   # Linux VPS/cPanel Webshell & Rootkit Auditor
 ├── mobile_forensics_audit.sh          # Android ADB & iOS MVT Spyware Orchestrator
@@ -223,3 +223,4 @@ d:\Source\WatchDogs/
 
 ## ⚖️ Legal & Ethical Usage Notice
 *This toolkit is developed exclusively for authorized compromise assessments, defensive posture audits, digital forensics, and incident response operations. Always ensure formal written authorization before performing audits on systems or networks you do not own.*
+
