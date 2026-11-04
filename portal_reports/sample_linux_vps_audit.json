@@ -1,0 +1,180 @@
+{
+  "scan_id": "sample_linux_vps_audit",
+  "timestamp": "2026-11-05 01:20:45 UTC",
+  "target_host": "vps-client-hosting-02.infra",
+  "host_type": "linux_server",
+  "stats": {
+    "alerts": 3,
+    "warnings": 1,
+    "info": 18
+  },
+  "findings": [
+    {
+      "severity": "ALERT",
+      "module": "1. PHP Webshell, RCE & Obfuscation Signature Scanner",
+      "message": "Potential PHP Webshell / RCE primitives detected! Found 1 signature match: eval(base64_decode...)",
+      "details": {
+        "FilePath": "/var/www/html/wp-includes/class-wp-hook.php",
+        "SignatureMatched": "eval(base64_decode(\"ZXZhbCgkX1BPU1RbJ2NtZCddKTs=\"))",
+        "LineNumber": 42
+      },
+      "remediation_title": "Obfuscated PHP Webshell / Arbitrary Code Execution Primitive",
+      "threat_analysis": "Chained primitives like eval(base64_decode(...)) or unvalidated system($_GET['cmd']) allow remote unauthenticated attackers to execute arbitrary shell commands with web server (www-data) privileges.",
+      "remediation_steps": [
+        {
+          "phase": "1. Quarantine Malicious File Immediately",
+          "action": "Strip execution permissions and move the webshell outside the public web document root.",
+          "command": "chmod 000 \"/var/www/html/wp-includes/class-wp-hook.php\" && mv \"/var/www/html/wp-includes/class-wp-hook.php\" /root/quarantine_$(date +%s).php"
+        },
+        {
+          "phase": "2. Inspect Web Server Access Logs for Attacker IP",
+          "action": "Identify the external IP addresses that made HTTP requests to this webshell.",
+          "command": "grep -rn \"class-wp-hook.php\" /var/log/nginx/ /var/log/apache2/ /usr/local/apache/domlogs/ 2>/dev/null | tail -n 20"
+        },
+        {
+          "phase": "3. Block Attacker IP at Firewall",
+          "action": "Drop incoming packets from the identified threat actor IP.",
+          "command": "iptables -I INPUT -s <ATTACKER_IP> -j DROP"
+        }
+      ]
+    },
+    {
+      "severity": "ALERT",
+      "module": "2. Rogue Executable Scripts in Static/Upload Directories",
+      "message": "HIGH RISK: Found 1 executable script(s) in static/upload directories: avatar_cache.phtml",
+      "details": {
+        "FilePath": "/var/www/html/wp-content/uploads/2026/02/avatar_cache.phtml",
+        "Permissions": "-rwxr-xr-x",
+        "FileSize": "1.8K"
+      },
+      "remediation_title": "Rogue Executable Script Located in Static Upload/Media Directory",
+      "threat_analysis": "Static directories (/uploads, /images, /cache) should only serve images and documents. An executable script in an upload folder is high-confidence evidence of an unvalidated file-upload exploit.",
+      "remediation_steps": [
+        {
+          "phase": "1. Remove Malicious Uploaded Script",
+          "action": "Delete the rogue script file.",
+          "command": "rm -f \"/var/www/html/wp-content/uploads/2026/02/avatar_cache.phtml\""
+        },
+        {
+          "phase": "2. Enforce .htaccess Execution Lock",
+          "action": "Place an execution lock in the upload directory to forbid script handlers.",
+          "command": "cat << 'EOF' > $(dirname \"/var/www/html/wp-content/uploads/2026/02/avatar_cache.phtml\")/.htaccess\n<FilesMatch \"\\.(php|phtml|phar|pl|py|jsp|asp|sh|cgi)$\">\n    Require all denied\n</FilesMatch>\nOptions -ExecCGI -Indexes\nEOF"
+        },
+        {
+          "phase": "3. Audit Remaining Files in Upload Directory",
+          "action": "Scan for any additional scripts in the upload folder tree.",
+          "command": "find $(dirname \"/var/www/html/wp-content/uploads/2026/02/avatar_cache.phtml\") -type f \\( -name \"*.php*\" -o -name \"*.sh\" -o -name \"*.py\" \\)"
+        }
+      ]
+    },
+    {
+      "severity": "ALERT",
+      "module": "4. .htaccess Hijacking & auto_prepend_file Injections",
+      "message": "CRITICAL: Suspicious .htaccess directives detected: auto_prepend_file",
+      "details": {
+        "FilePath": "/var/www/html/.htaccess",
+        "DirectiveMatched": "php_value auto_prepend_file /tmp/.session_cache.php",
+        "LineNumber": 1
+      },
+      "remediation_title": ".htaccess Hijack (auto_prepend_file or SEO Cloaking Redirect)",
+      "threat_analysis": "Threat actors inject auto_prepend_file into .htaccess to automatically execute a backdoor before every legitimate web page loads, or inject RewriteCond rules to divert search engine traffic.",
+      "remediation_steps": [
+        {
+          "phase": "1. Clean Malicious Directives from .htaccess",
+          "action": "Remove the injected auto_prepend_file or RewriteCond rules.",
+          "command": "sed -i '/auto_prepend_file/d; /auto_append_file/d' \"/var/www/html/.htaccess\""
+        },
+        {
+          "phase": "2. Lock .htaccess Immutability",
+          "action": "Set strict read-only permissions and optionally immutable flag.",
+          "command": "chmod 444 \"/var/www/html/.htaccess\" && chattr +i \"/var/www/html/.htaccess\" 2>/dev/null || true"
+        },
+        {
+          "phase": "3. Verification",
+          "action": "Inspect the cleaned .htaccess configuration.",
+          "command": "cat \"/var/www/html/.htaccess\""
+        }
+      ]
+    },
+    {
+      "severity": "WARN",
+      "module": "5. PHP Runtime Hardening & PHP2Shell Audit",
+      "message": "PHP session.upload_progress.enabled is ON! (Exploitable via PHP2Shell LFI-to-RCE race condition)",
+      "details": {
+        "Directive": "session.upload_progress.enabled",
+        "CurrentValue": "On",
+        "Recommended": "0"
+      },
+      "remediation_title": "Insecure PHP Configuration: session.upload_progress.enabled or allow_url_include",
+      "threat_analysis": "When session.upload_progress.enabled is On, attackers can exploit local file inclusion (LFI) via PHP2Shell race conditions. allow_url_include allows direct Remote File Inclusion (RFI).",
+      "remediation_steps": [
+        {
+          "phase": "1. Edit Active php.ini",
+          "action": "Locate php.ini and enforce secure directives.",
+          "command": "sudo sed -i 's/^session.upload_progress.enabled = .*/session.upload_progress.enabled = 0/' /etc/php/*/fpm/php.ini /etc/php/*/apache2/php.ini /etc/php.ini 2>/dev/null"
+        },
+        {
+          "phase": "2. Enforce Dangerous Function Restrictions",
+          "action": "Disable command execution functions in php.ini.",
+          "command": "sudo sed -i 's/^disable_functions =.*/disable_functions = exec,passthru,shell_exec,system,proc_open,popen,curl_exec,curl_multi_exec,parse_ini_file,show_source/' /etc/php/*/fpm/php.ini 2>/dev/null"
+        },
+        {
+          "phase": "3. Restart PHP Service",
+          "action": "Reload PHP-FPM or Apache to apply the new runtime settings.",
+          "command": "sudo systemctl restart php*-fpm 2>/dev/null || sudo systemctl restart apache2 || sudo systemctl restart httpd"
+        }
+      ]
+    }
+  ],
+  "audit_summary": {
+    "what_went_well": [
+      {
+        "category": "Userland Integrity",
+        "title": "Dynamic Linker (/etc/ld.so.preload) Clean",
+        "detail": "No shared library hooks or userland LD_PRELOAD rootkit implants detected."
+      },
+      {
+        "category": "Filesystem Hardening",
+        "title": "Secure File Permissions",
+        "detail": "Zero world-writable executable, script, or sensitive environment files found in webroot."
+      },
+      {
+        "category": "Audit Execution",
+        "title": "Assessment Lifecycle Completed",
+        "detail": "Successfully evaluated 4 technical artifacts and indicators with timestamped logging."
+      }
+    ],
+    "what_went_wrong": [
+      {
+        "type": "ALERT",
+        "category": "Active Threat Indicator",
+        "title": "Obfuscated PHP Webshell / Arbitrary Code Execution Primitive",
+        "detail": "Potential PHP Webshell / RCE primitives detected! Found 1 signature match: eval(base64_decode...)",
+        "module": "1. PHP Webshell, RCE & Obfuscation Signature Scanner"
+      },
+      {
+        "type": "ALERT",
+        "category": "Active Threat Indicator",
+        "title": "Rogue Executable Script Located in Static Upload/Media Directory",
+        "detail": "HIGH RISK: Found 1 executable script(s) in static/upload directories: avatar_cache.phtml",
+        "module": "2. Rogue Executable Scripts in Static/Upload Directories"
+      },
+      {
+        "type": "ALERT",
+        "category": "Active Threat Indicator",
+        "title": ".htaccess Hijack (auto_prepend_file or SEO Cloaking Redirect)",
+        "detail": "CRITICAL: Suspicious .htaccess directives detected: auto_prepend_file",
+        "module": "4. .htaccess Hijacking & auto_prepend_file Injections"
+      },
+      {
+        "type": "WARN",
+        "category": "Security Blindspot / Exposure",
+        "title": "Insecure PHP Configuration: session.upload_progress.enabled or allow_url_include",
+        "detail": "PHP session.upload_progress.enabled is ON! (Exploitable via PHP2Shell LFI-to-RCE race condition)",
+        "module": "5. PHP Runtime Hardening & PHP2Shell Audit"
+      }
+    ],
+    "strengths_count": 3,
+    "issues_count": 4
+  }
+}

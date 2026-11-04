@@ -1,0 +1,96 @@
+{
+  "scan_id": "sample_mobile_forensic_audit",
+  "timestamp": "2026-11-05 01:25:10 UTC",
+  "target_host": "Google Pixel 8 Pro (Android 14)",
+  "host_type": "mobile",
+  "stats": {
+    "alerts": 1,
+    "warnings": 1,
+    "info": 12
+  },
+  "findings": [
+    {
+      "severity": "ALERT",
+      "module": "7. User-Installed Root CA Certificates (TLS Interception Check)",
+      "message": "CRITICAL: User-installed Root CA certificate found in /data/misc/user/0/cacerts-added/!",
+      "details": {
+        "CertHash": "9a8b7c6d.0",
+        "Subject": "CN=MitMProxy SubCA, O=Unknown Corp",
+        "Location": "/data/misc/user/0/cacerts-added/9a8b7c6d.0"
+      },
+      "remediation_title": "User-Installed Root CA Certificate (TLS Interception / MITM Proxy)",
+      "threat_analysis": "A rogue certificate installed in user credentials allows attackers or spyware to decrypt and intercept all HTTPS traffic, credentials, and encrypted communications in real-time.",
+      "remediation_steps": [
+        {
+          "phase": "1. Delete User Certificate in Android Settings",
+          "action": "Navigate to Settings -> Security -> Encryption & Credentials -> User Credentials, select the certificate, and tap 'Remove'."
+        },
+        {
+          "phase": "2. Verify Filesystem Cleanliness via ADB",
+          "action": "Check that the user cert directory is empty.",
+          "command": "adb shell ls -la /data/misc/user/0/cacerts-added/"
+        }
+      ]
+    },
+    {
+      "severity": "WARN",
+      "module": "6. 3rd-Party & Sideloaded Package Audit",
+      "message": "Sideloaded / Non-Play-Store Package: com.device.system.updater (Installer: NONE/Direct-APK)",
+      "details": {
+        "PackageName": "com.device.system.updater",
+        "Installer": "NONE/Direct-APK",
+        "ApkPath": "/data/app/~~a1b2c3==/com.device.system.updater-xyz/base.apk"
+      },
+      "remediation_title": "Sideloaded / Non-Google Play 3rd-Party Application",
+      "threat_analysis": "Applications installed outside official app stores bypass automated security vetting and frequently contain repackaged spyware or banking trojans.",
+      "remediation_steps": [
+        {
+          "phase": "1. Uninstall Sideloaded Package",
+          "action": "Remove the unverified package via ADB.",
+          "command": "adb uninstall com.device.system.updater"
+        },
+        {
+          "phase": "2. Disable Unknown Sources",
+          "action": "Ensure 'Install Unknown Apps' is globally revoked in Android Settings -> Apps -> Special App Access."
+        }
+      ]
+    }
+  ],
+  "audit_summary": {
+    "what_went_well": [
+      {
+        "category": "Privacy Defenses",
+        "title": "No Abusive Accessibility Keyloggers",
+        "detail": "Zero stalkerware or keylogger services hooking screen or keystroke events via Accessibility APIs."
+      },
+      {
+        "category": "Advanced Threat Intelligence",
+        "title": "Clean STIX2 Spyware Indicators",
+        "detail": "Zero matches against Amnesty International STIX2 indicators for Pegasus, Predator, or Cytrox spyware."
+      },
+      {
+        "category": "Audit Execution",
+        "title": "Assessment Lifecycle Completed",
+        "detail": "Successfully evaluated 2 technical artifacts and indicators with timestamped logging."
+      }
+    ],
+    "what_went_wrong": [
+      {
+        "type": "ALERT",
+        "category": "Active Threat Indicator",
+        "title": "User-Installed Root CA Certificate (TLS Interception / MITM Proxy)",
+        "detail": "CRITICAL: User-installed Root CA certificate found in /data/misc/user/0/cacerts-added/!",
+        "module": "7. User-Installed Root CA Certificates (TLS Interception Check)"
+      },
+      {
+        "type": "WARN",
+        "category": "Security Blindspot / Exposure",
+        "title": "Sideloaded / Non-Google Play 3rd-Party Application",
+        "detail": "Sideloaded / Non-Play-Store Package: com.device.system.updater (Installer: NONE/Direct-APK)",
+        "module": "6. 3rd-Party & Sideloaded Package Audit"
+      }
+    ],
+    "strengths_count": 3,
+    "issues_count": 2
+  }
+}

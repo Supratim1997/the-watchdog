@@ -1,0 +1,20 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Runtime audit output directories
+Windows_Audit_*/
+mobile_forensics_*/
+raw_evidence/
+portal_reports/win_audit_*.json
+portal_reports/scan_*.json
+
+# Temporary and editor files
+*.tmp
+*.temp
+*~
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

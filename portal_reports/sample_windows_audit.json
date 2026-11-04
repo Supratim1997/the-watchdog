@@ -1,0 +1,171 @@
+{
+  "scan_id": "sample_windows_audit",
+  "timestamp": "2026-11-05 01:15:20 UTC",
+  "target_host": "DESKTOP-PROD-SEC01 (CORP)",
+  "host_type": "windows",
+  "stats": {
+    "alerts": 2,
+    "warnings": 1,
+    "info": 24
+  },
+  "findings": [
+    {
+      "severity": "ALERT",
+      "module": "2. Unsigned Processes & User-Directory Executables",
+      "message": "CRITICAL: Unsigned process executing from user-writable directory: svchost_update.exe (PID: 5824)",
+      "details": {
+        "ProcessName": "svchost_update.exe",
+        "ProcessID": 5824,
+        "ParentProcessID": 1044,
+        "ExecutablePath": "C:\\Users\\Analyst\\AppData\\Local\\Temp\\svchost_update.exe",
+        "SignatureStatus": "NotSigned",
+        "CommandLine": "C:\\Users\\Analyst\\AppData\\Local\\Temp\\svchost_update.exe --beacon"
+      },
+      "remediation_title": "Unsigned Executable in User-Writable Staging Directory",
+      "threat_analysis": "Malicious implants, infostealers, and secondary stage loaders frequently execute from AppData, Temp, or ProgramData to bypass standard directory ACLs without requiring administrative write privileges.",
+      "remediation_steps": [
+        {
+          "phase": "1. Immediate Host & Process Containment",
+          "action": "Terminate the rogue process immediately using its Process ID (PID).",
+          "command": "Stop-Process -Id 5824 -Force"
+        },
+        {
+          "phase": "2. Forensic Staging & Carving",
+          "action": "Copy the suspicious binary to an isolated quarantined location for hashing and reverse engineering before deletion.",
+          "command": "Copy-Item -Path \"C:\\Users\\Analyst\\AppData\\Local\\Temp\\svchost_update.exe\" -Destination \"$env:TEMP\\quarantine_5824.bin\" -Force"
+        },
+        {
+          "phase": "3. Eradication & File Removal",
+          "action": "Permanently remove the unverified binary from the user profile.",
+          "command": "Remove-Item -Path \"C:\\Users\\Analyst\\AppData\\Local\\Temp\\svchost_update.exe\" -Force"
+        },
+        {
+          "phase": "4. Verification",
+          "action": "Confirm no residual child processes or reinfection routines are executing.",
+          "command": "Get-Process -Name \"svchost_update.exe\" -ErrorAction SilentlyContinue"
+        }
+      ]
+    },
+    {
+      "severity": "ALERT",
+      "module": "4. Registry Run Keys & Image File Execution Options (IFEO)",
+      "message": "Suspicious Registry Persistence entry invoking LOLBin or user-writable path: WindowsUpdateChecker",
+      "details": {
+        "RegistryKey": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+        "ValueName": "WindowsUpdateChecker",
+        "ValueData": "powershell.exe -enc V3JpdGUtSG9zdCAiSGFja2VkIg== -windowstyle hidden",
+        "Resolved": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+      },
+      "remediation_title": "Suspicious Registry Run Key Invoking LOLBin / Encoded Command",
+      "threat_analysis": "Adversaries maintain userland persistence across reboots by creating registry values in HKLM/HKCU Run keys that trigger living-off-the-land binaries (LOLBins) like powershell.exe, cmd.exe, or mshta.exe with hidden or encoded commands.",
+      "remediation_steps": [
+        {
+          "phase": "1. Eradicate Persistence Hook",
+          "action": "Remove the malicious autorun registry property.",
+          "command": "Remove-ItemProperty -Path \"HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\" -Name \"WindowsUpdateChecker\" -Force"
+        },
+        {
+          "phase": "2. Inspect Child Processes",
+          "action": "Search for any active processes spawned by the autorun script.",
+          "command": "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like \"*WindowsUpdateChecker*\" } | Select-Object ProcessId, CommandLine"
+        },
+        {
+          "phase": "3. Verification",
+          "action": "Ensure the registry value has been completely eradicated.",
+          "command": "Get-ItemProperty -Path \"HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\" -Name \"WindowsUpdateChecker\" -ErrorAction SilentlyContinue"
+        }
+      ]
+    },
+    {
+      "severity": "WARN",
+      "module": "5. Non-Standard Services & Unsigned Running Kernel Drivers",
+      "message": "Third-party service running outside standard Windows system32: CustomTelemetrySvc",
+      "details": {
+        "ServiceName": "CustomTelemetrySvc",
+        "DisplayName": "Custom System Telemetry Agent",
+        "State": "Running",
+        "PathName": "C:\\ProgramData\\Telemetry\\agent.exe",
+        "SignatureStatus": "Valid",
+        "Signer": "CN=ThirdPartyMonitor Ltd"
+      },
+      "remediation_title": "Non-Standard Service Inspection & Remediation",
+      "threat_analysis": "Third-party services executing outside Windows System32 can be leveraged for defense evasion or unauthorized persistence. Inspect the binary path, vendor digital signature, and startup arguments.",
+      "remediation_steps": [
+        {
+          "phase": "1. Inspect Service Details",
+          "action": "Query the service configuration and verify vendor signature.",
+          "command": "Get-Service -Name \"CustomTelemetrySvc\" | Format-List *"
+        },
+        {
+          "phase": "2. Stop and Disable if Unauthorized",
+          "action": "Halt the service and prevent automatic startup.",
+          "command": "Stop-Service -Name \"CustomTelemetrySvc\" -Force; Set-Service -Name \"CustomTelemetrySvc\" -StartupType Disabled"
+        },
+        {
+          "phase": "3. Eradicate Service Registration",
+          "action": "Delete the service entry if confirmed malicious.",
+          "command": "sc.exe delete \"CustomTelemetrySvc\""
+        }
+      ]
+    }
+  ],
+  "audit_summary": {
+    "what_went_well": [
+      {
+        "category": "Antivirus Posture",
+        "title": "Windows Defender Real-Time Protection Active",
+        "detail": "Core antivirus real-time behavioral monitoring and IOAV inspection remain operational."
+      },
+      {
+        "category": "Persistence Integrity",
+        "title": "WMI Repository Clean (Zero Fileless Backdoors)",
+        "detail": "No unauthorized __EventFilter or __EventConsumer bindings detected in root\\subscription."
+      },
+      {
+        "category": "Kernel Space Integrity",
+        "title": "Kernel Drivers Verified & Clean",
+        "detail": "Zero unsigned running kernel drivers discovered. Driver Signature Enforcement (DSE) is uncompromised."
+      },
+      {
+        "category": "Authentication Gate",
+        "title": "Accessibility Subsystems Intact (Zero IFEO Backdoors)",
+        "detail": "No Debugger overrides configured under Image File Execution Options for sethc.exe or utilman.exe."
+      },
+      {
+        "category": "Audit Trail Integrity",
+        "title": "Security Event Log Intact",
+        "detail": "No Event ID 1102 (Audit Log Cleared) events found over past 7 days, confirming audit trail integrity."
+      },
+      {
+        "category": "Audit Execution",
+        "title": "Assessment Lifecycle Completed",
+        "detail": "Successfully evaluated 3 technical artifacts and indicators with timestamped logging."
+      }
+    ],
+    "what_went_wrong": [
+      {
+        "type": "ALERT",
+        "category": "Active Threat Indicator",
+        "title": "Unsigned Executable in User-Writable Staging Directory",
+        "detail": "CRITICAL: Unsigned process executing from user-writable directory: svchost_update.exe (PID: 5824)",
+        "module": "2. Unsigned Processes & User-Directory Executables"
+      },
+      {
+        "type": "ALERT",
+        "category": "Active Threat Indicator",
+        "title": "Suspicious Registry Run Key Invoking LOLBin / Encoded Command",
+        "detail": "Suspicious Registry Persistence entry invoking LOLBin or user-writable path: WindowsUpdateChecker",
+        "module": "4. Registry Run Keys & Image File Execution Options (IFEO)"
+      },
+      {
+        "type": "WARN",
+        "category": "Security Blindspot / Exposure",
+        "title": "Non-Standard Service Inspection & Remediation",
+        "detail": "Third-party service running outside standard Windows system32: CustomTelemetrySvc",
+        "module": "5. Non-Standard Services & Unsigned Running Kernel Drivers"
+      }
+    ],
+    "strengths_count": 6,
+    "issues_count": 3
+  }
+}
